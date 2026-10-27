@@ -1,7 +1,10 @@
 {
   "name": "liber-cosmetic",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
-  "description": "Liber Cosmetic: onlayn do'kon va kosmetologik konsultatsiya (Supabase + Vercel)",
-  "engines": { "node": ">=18" }
+  "description": "Liber Cosmetic: onlayn do'kon va kosmetologik konsultatsiya (Vercel + Postgres)",
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "pg": "^8.13.0"
+  }
 }

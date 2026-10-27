@@ -88,6 +88,7 @@ h1, h2, h3 { text-wrap: balance; }
 .nav a.special { color: var(--gold); }
 .demo { background: var(--ink); color: var(--on-ink); font-size: 13px; }
 .demo .wrap { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; justify-content: center; padding-block: 7px; text-align: center; }
+.demo.bad { background: var(--err); color: #fff; }
 .demo button { font: inherit; font-size: 12px; background: none; border: 1px solid currentColor; color: inherit; padding: 4px 10px; cursor: pointer; border-radius: 2px; }
 
 /* buttons */

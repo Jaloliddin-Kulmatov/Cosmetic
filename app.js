@@ -336,7 +336,7 @@
   function panelProducts() {
     var P = S.panel, d = P.draft, q = P.q.trim().toLowerCase();
     var list = S.products.filter(function (p) { return !q || p.name.toLowerCase().indexOf(q) > -1; });
-    var h = '<div class="toolbar"><input type="text" id="pq" placeholder="Mahsulot qidirish..." value="' + esc(P.q) + '" aria-label="Qidirish"><button class="btn" type="button" data-act="pnew">+ Yangi mahsulot</button></div>';
+    var h = '<div class="toolbar"><input type="text" id="pq" placeholder="Mahsulot qidirish..." value="' + esc(P.q) + '" aria-label="Qidirish"><div class="actions">' + (S.pLoaded && !S.products.length ? '<button class="btn ghost" type="button" data-act="pseed">Namunaviy katalogni yuklash</button>' : "") + '<button class="btn" type="button" data-act="pnew">+ Yangi mahsulot</button></div></div>';
     if (d) h += editorHtml(d);
     h += '<div class="tblwrap"><table class="tbl"><thead><tr><th></th><th>Nomi</th><th>Toifa</th><th class="num">Narx</th><th>Holat</th><th></th></tr></thead><tbody>' + (list.length ? list.map(function (p) {
       var flags = (p.active ? "" : '<span class="pill off">Yashirin</span> ') + (p.stock ? "" : '<span class="pill off">Qolmagan</span> ') + (p.isNew ? '<span class="pill new">Yangi</span> ' : "") + (p.wk ? '<span class="pill">Hafta</span> ' : "") + (p.old ? '<span class="pill">Aksiya</span>' : "");
@@ -437,9 +437,10 @@
     $("#cartN").textContent = cartCount();
     $("#acctDot").hidden = !S.user;
     var dm = $("#demoBar");
-    if (api.mode === "demo") {
+    if (api.mode === "demo" || api.mode === "error") {
       dm.hidden = false;
-      dm.innerHTML = '<div class="wrap"><span>' + esc(t("demo")) + '</span>' + (S.user && isStaff(S.user) ? "" : '<button type="button" data-act="demologin" data-role="admin">Admin</button><button type="button" data-act="demologin" data-role="staff">Xodim</button>') + "</div>";
+      dm.className = "demo" + (api.mode === "error" ? " bad" : "");
+      dm.innerHTML = '<div class="wrap"><span>' + esc(api.mode === "error" ? (api.note || tu("err.generic")) : t("demo")) + '</span>' + (api.mode === "demo" && !(S.user && isStaff(S.user)) ? '<button type="button" data-act="demologin" data-role="admin">Admin</button><button type="button" data-act="demologin" data-role="staff">Xodim</button>' : "") + "</div>";
     } else dm.hidden = true;
     var f = '<div><img src="assets/logo.jpg" alt="Liber Cosmetic" width="360" height="175"><small>© Liber Cosmetic</small></div>';
     f += "<div><h4>" + esc(t("f.shop")) + "</h4>" + ["parfyumeriya", "pardoz", "parvarish", "toplamlar", "konsultatsiya"].map(function (r) { return '<a href="#' + r + '" data-go="' + r + '">' + esc(t("nav." + r)) + "</a>"; }).join("") + "</div>";
@@ -455,7 +456,7 @@
     if (ROUTES.indexOf(r) < 0) r = "home";
     if (r === "konsultatsiya" && S.route !== "konsultatsiya" && !(params && params.keep)) { S.consult.done = false; if (!(params && params.staff)) S.consult.staffMode = false; }
     S.route = r; S.params = params || {};
-    if (r === "kirish" || (r === "hisob" && !S.user)) { S.authMode = (params && params.mode) || S.authMode; if (!(params && params.mode)) S.next = "home"; }
+    if (r === "kirish" || (r === "hisob" && !S.user)) { S.authMode = (params && params.mode) || "login"; if (!(params && params.mode)) S.next = "home"; }
     $("#nav").classList.remove("open"); $("#menuBtn").setAttribute("aria-expanded", "false");
     try { history.replaceState(null, "", "#" + (TOKEN[r] || r)); } catch (e) {}
     render(false);
@@ -510,6 +511,7 @@
       case "pdelno": P.confirmDel = null; render(true); break;
       case "pdelyes": api.deleteProduct(id).then(function () { P.confirmDel = null; toast("O'chirildi"); return loadProducts(); }).catch(function () { toast(tu("err.generic")); }); break;
       case "rmimg": P.draft.img = ""; render(true); break;
+      case "pseed": api.seedProducts().then(function () { toast("Namunaviy mahsulotlar qo'shildi"); return loadProducts(); }).catch(function () { toast(tu("err.generic")); }); break;
       case "psave": saveDraft(); break;
       case "savenote": var ta = $('[data-note="' + id + '"]'); api.saveConsultationNote(isNaN(+id) ? id : +id, ta.value).then(function () { setStatus("#ns_" + id, "Saqlandi", false); }).catch(function () { setStatus("#ns_" + id, tu("err.generic"), true); }); break;
       case "openphoto": e.preventDefault(); var im = $("img", el); if (im && im.src) window.open(im.src, "_blank"); break;

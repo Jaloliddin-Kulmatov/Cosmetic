@@ -1,78 +1,74 @@
 # Liber Cosmetic
 
-Onlayn kosmetika do'koni va kosmetologik konsultatsiya. Build kerak emas: oddiy HTML, CSS va JavaScript. Ma'lumotlar Supabase'da saqlanadi.
+Online cosmetics shop and cosmetology consultation. Plain HTML, CSS and JavaScript on the front end, Vercel serverless functions on the back end, and Postgres (Supabase) for data. **One secret is all it needs: `DATABASE_URL`.**
 
-## Imkoniyatlar
+## What it does
 
-| Kim | Nima qila oladi |
+| Who | What they can do |
 | --- | --- |
-| Mijoz | Ro'yxatdan o'tadi, mahsulot tanlaydi, buyurtma beradi (manzil yoki joylashuv bilan), buyurtma holatini kuzatadi, anketa to'ldiradi va suratlarini yuklaydi |
-| Xodim | Mahsulot kiritadi/tahrirlaydi/o'chiradi, rasm yuklaydi, buyurtmalar holatini o'zgartiradi, bemorlar bazasini ko'radi, izoh yozadi, yangi bemor anketasini kiritadi, mijozlar ro'yxatini ko'radi |
-| Admin | Xodimning hammasi + xodim qo'shadi va rollarni o'zgartiradi |
+| Customer | Register and sign in, browse and order (with an address or shared location), track order status, fill in the questionnaire and upload photos |
+| Staff | Add, edit and delete products (with photos), update order status, search the patient records, add notes, enter a walk-in patient's questionnaire, see the customer list |
+| Admin | Everything staff can do, plus add staff and change roles |
 
-Sayt 4 tilda: o'zbek, rus, ingliz, qoraqalpoq. Admin panel o'zbekcha.
+The site is available in Uzbek, Russian, English and Karakalpak. The staff panel is in Uzbek. Have a native speaker review the Karakalpak text in `i18n.js`.
 
-## Ishga tushirish
+## Deploy to Vercel
 
-1. **Supabase loyihasi** yarating (supabase.com).
-2. **SQL Editor** da `supabase/schema.sql` faylini ishga tushiring. Jadvallar, xavfsizlik qoidalari (RLS) va rasm saqlash joylari yaratiladi.
-3. Ixtiyoriy: `supabase/seed.sql` namunaviy mahsulotlarni qo'shadi. Haqiqiy katalogni panel orqali kiritish yaxshiroq.
-4. **Project Settings > API Keys** dan `Project URL` va ochiq kalitni (`anon` yoki `sb_publishable_...`) oling. Vercel'da ularni Environment Variables'ga, lokal ishlatganda `config.js` ga yozing. `service_role` va `sb_secret_` kalitlarni hech qachon qo'ymang.
-5. Saytda o'z emailingiz bilan ro'yxatdan o'ting, so'ng SQL Editor da o'zingizni admin qiling:
-   ```sql
-   update public.profiles set role = 'admin' where email = 'sizning@email.com';
-   ```
-6. Sahifani qayta yuklang. Menyuda **Panel** paydo bo'ladi.
-7. `config.js` da `telegram`, `phone`, `shopAddress`, `mapUrl` ni to'ldiring.
+1. **Get the database connection string.** In Supabase open your project, click **Connect**, and choose the **Transaction pooler** string (port `6543`). It looks like:
+   `postgresql://postgres.<project-id>:[YOUR-PASSWORD]@aws-0-<region>.pooler.supabase.com:6543/postgres`
+   - Do **not** use the "Direct connection" string (`db.<id>.supabase.co:5432`). It is IPv6-only and Vercel cannot reach it.
+   - Replace `[YOUR-PASSWORD]` with your database password. If the password contains special characters, URL-encode them (`@` becomes `%40`, `#` becomes `%23`).
+2. **Push the project to GitHub**, then in Vercel choose **Add New > Project** and import it. Framework Preset: **Other**. Leave the build settings alone.
+3. In **Settings > Environment Variables** add:
+   - `DATABASE_URL` = the string from step 1 (required)
+   - `ADMIN_EMAIL` = your email (see "First admin" below)
+   - optional: `TELEGRAM_USERNAME`, `SHOP_PHONE`, `INSTAGRAM_USERNAME`, `SHOP_ADDRESS`, `MAP_URL`
+4. **Deploy** (or **Redeploy** after adding variables).
+5. Open the site. The tables are created automatically on the first request, so there is no SQL to run.
 
-**Email tasdiqlash:** Supabase sukut bo'yicha ro'yxatdan o'tganda email tasdiqlashni talab qiladi. Sinash vaqtida Authentication > Providers > Email bo'limida o'chirib qo'yishingiz mumkin. Ishga tushirgach qayta yoqing.
+If the site shows a red banner at the top, the banner text says what is wrong with the connection (wrong password, direct host instead of pooler, missing variable).
 
-**Authentication > URL Configuration** da sayt manzilingizni `Site URL` ga yozing, aks holda tasdiqlash xatidagi havola ishlamaydi.
+### First admin
 
-## Vercel'ga joylashtirish
+Set `ADMIN_EMAIL`, then **register on the live site with that exact email right after the first deploy**. That account becomes admin. This works only while no admin exists yet, so it cannot be repeated by someone else later. Until you register, anyone who knows the address could take it, so do it straight away.
 
-Build kerak emas. Vercel fayllarni o'zi beradi, `api/config.js` funksiyasi esa Supabase sozlamalarini Environment Variables'dan olib `/config.js` sifatida yuboradi. Shuning uchun kalitlar kodga yozilmaydi.
+If you need to fix roles later, run this in the Supabase SQL Editor:
 
-1. Supabase'da `supabase/schema.sql` ni SQL Editor orqali ishga tushiring (yuqoridagi 2-qadam).
-2. Papkani GitHub'ga yuklang va vercel.com > Add New > Project orqali import qiling. Framework Preset: **Other**. Build Command va Output Directory'ga tegmang.
-   Terminaldan: `npx vercel` (birinchi marta), keyin `npx vercel --prod`.
-3. Vercel > Project > Settings > Environment Variables ga qo'shing (namuna `.env.example` da):
-   - `SUPABASE_URL` = `https://<loyiha-id>.supabase.co`
-   - `SUPABASE_ANON_KEY` = anon yoki `sb_publishable_...` kalit
-   - ixtiyoriy: `TELEGRAM_USERNAME`, `SHOP_PHONE`, `INSTAGRAM_USERNAME`, `SHOP_ADDRESS`, `MAP_URL`
+```sql
+update public.users set role = 'admin' where email = 'you@example.com';
+```
 
-   Supabase'ning Vercel integratsiyasini yoqsangiz, `NEXT_PUBLIC_SUPABASE_URL` va `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` nomlari ham taniladi.
-4. O'zgaruvchilarni qo'shgach **Redeploy** qiling.
-5. Supabase > Authentication > URL Configuration: `Site URL` ga Vercel manzilingizni (`https://sizning-sayt.vercel.app`) yozing va `Redirect URLs` ga ham qo'shing. Aks holda email tasdiqlash havolasi ishlamaydi.
-6. Saytda ro'yxatdan o'ting va o'zingizni admin qiling (yuqoridagi 5-qadam).
+### Add products
 
-Agar `SUPABASE_ANON_KEY` ga maxfiy kalit (`service_role` yoki `sb_secret_`) qo'yilsa, funksiya uni brauzerga yubormaydi va konsolda xato yozadi.
+Sign in as admin, open **Panel > Mahsulotlar**, and click **+ Yangi mahsulot**. On an empty catalog there is also a **Namunaviy katalogni yuklash** button that loads 18 sample products.
 
-`vercel.json` xavfsizlik sarlavhalarini (CSP, X-Frame-Options va boshqalar) qo'shadi. Supabase uchun o'z domeningizni (custom domain) ulasangiz, `Content-Security-Policy` dagi `*.supabase.co` ni shu domenga moslang.
+## Run locally
 
-## Lokal ishlatish
+The front end works on its own in **demo mode** (data stays in the browser, with Admin/Staff sign-in buttons at the top):
 
 ```bash
 python3 -m http.server 8080
 ```
 
-Lokal ishlaganda `config.js` ishlatiladi (u yerga URL va anon kalitni yozing, lekin git'ga yuklamang). `config.js` bo'sh bo'lsa sayt **demo rejimda** ishlaydi: ma'lumotlar faqat brauzerda saqlanadi, tepada Admin/Xodim sifatida kirish tugmalari chiqadi.
+For the real back end locally, install the Vercel CLI, put `DATABASE_URL` in a `.env` file (see `.env.example`) and run `vercel dev`.
 
-## Xavfsizlik
+## How it is built
 
-- Narxlar serverda hisoblanadi (`place_order` funksiyasi). Mijoz narxni o'zgartira olmaydi.
-- Rolni faqat admin o'zgartiradi (`set_user_role`). Foydalanuvchi o'z profilida faqat ism va telefonni tahrirlaydi.
-- Bemor suratlari yopiq bucket'da (`patient-photos`). Faqat egasi va xodimlar ko'radi, havolalar 1 soatga amal qiladi.
-- Bemor anketalari va buyurtmalar faqat egasi va xodimlarga ko'rinadi.
-- Bemor ma'lumotlari sog'liq haqidagi shaxsiy ma'lumot. Ishga tushirishdan oldin amaldagi qonunchilikka (shaxsiy ma'lumotlar to'g'risidagi qonun) mosligini tekshiring.
+- `index.html`, `styles.css`: page and design
+- `app.js`: interface (shop, cart, sign-in, questionnaire, staff panel)
+- `api.js`: data layer. It checks `/api/health` and uses the server when it answers, otherwise demo mode
+- `i18n.js`: all translations; `art.js`, `defaults.js`: drawings and sample catalog for products without photos
+- `api/[...path].js`: the whole REST API in one function; `api/_db.js`, `api/_schema.js`, `api/_util.js`: database, schema and security helpers; `api/config.js`: serves shop settings as `/config.js`
+- `vercel.json`: security headers (CSP and others) and the `/config.js` rewrite
 
-## Fayllar
+## Security notes
 
-- `index.html`, `styles.css`: sahifa va dizayn
-- `app.js`: interfeys (do'kon, savat, kirish, anketa, panel)
-- `api.js`: ma'lumotlar qatlami (Supabase yoki demo)
-- `i18n.js`: barcha tarjimalar. Qoraqalpoqcha matnlarni ona tilida so'zlashuvchi tekshirib chiqsin
-- `art.js`, `defaults.js`: rasmsiz mahsulot chizmalari va namunaviy katalog
-- `supabase/schema.sql`, `supabase/seed.sql`: ma'lumotlar bazasi (`supabase/migrations/` dagi nusxa Supabase CLI uchun)
-- `api/config.js`, `vercel.json`, `.vercelignore`: Vercel sozlamalari
-- `tools/build_preview.py`: saytni bitta faylga yig'adi (demo ko'rinish uchun)
+- Passwords are stored as salted scrypt hashes. Sessions are random tokens stored hashed in the database, sent in an `HttpOnly`, `Secure`, `SameSite=Lax` cookie, and revoked on logout or role change.
+- Login and registration are rate limited. Cross-site write requests are rejected.
+- Prices are always read from the database when an order is placed, never from the browser.
+- Uploaded images are checked by their file signature. Patient photos are only served to their owner and staff.
+- All tables have row-level security enabled with no policies, so Supabase's public API cannot read them. Only the server connects.
+- This is hand-written authentication with no email verification and no password reset. Staff can change roles, but there is no "forgot password" flow yet.
+- Patient questionnaires are health information. Check what your local data-protection rules require before going live.
+- Photos are stored inside the database (about 1.5 MB maximum each). The Supabase free plan has a 500 MB limit, so watch the size.
+- The test suite used to check the API ran against a local Postgres. It is not part of this repository.

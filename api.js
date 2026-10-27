@@ -1,14 +1,13 @@
-// Ma'lumotlar qatlami. Supabase sozlangan bo'lsa u ishlatiladi, aks holda demo rejim (ma'lumotlar faqat brauzerda).
-// Ikkala rejim bir xil funksiyalarni beradi, shuning uchun interfeys kodi farqni sezmaydi.
+// Brauzer tomonidagi ma'lumotlar qatlami.
+// Server rejimi: /api/* (Vercel funksiyalari, DATABASE_URL orqali Postgres).
+// Demo rejimi: backend topilmasa, ma'lumotlar faqat brauzerning localStorage'ida saqlanadi.
+// Interfeys ikkala rejimda bir xil funksiyalarni ishlatadi.
 (function (L) {
   "use strict";
-  var C = window.LIBER_CONFIG || {};
-  var SB = !!(C.supabaseUrl && C.supabaseAnonKey && window.supabase);
-  var api = { mode: SB ? "supabase" : "demo" };
+  var fail = function (code, msg) { var e = new Error(msg || code); e.code = code; return e; };
+  var rid = function () { return Math.random().toString(36).slice(2, 10); };
   var authCb = [];
   var fire = function () { authCb.forEach(function (f) { try { f(); } catch (e) {} }); };
-  api.onAuth = function (cb) { authCb.push(cb); };
-  var fail = function (code, msg) { var e = new Error(msg || code); e.code = code; return e; };
 
   // ---------- rasm siqish (telefon suratlari katta bo'ladi) ----------
   L.compress = function (file, max, quality) {
@@ -26,170 +25,164 @@
     });
   };
   var blobToDataUrl = function (b) { return new Promise(function (res, rej) { var r = new FileReader(); r.onload = function () { res(r.result); }; r.onerror = rej; r.readAsDataURL(b); }); };
-  var rid = function () { return Math.random().toString(36).slice(2, 10); };
+  var blobToB64 = function (b) { return blobToDataUrl(b).then(function (u) { return u.slice(u.indexOf(",") + 1); }); };
 
-  // ---------- Supabase ----------
-  if (SB) {
-    var sb = window.supabase.createClient(C.supabaseUrl, C.supabaseAnonKey);
-    sb.auth.onAuthStateChange(function () { setTimeout(fire, 0); });
-    var prodFrom = function (r) { return { id: r.id, name: r.name, cat: r.category, ty: r.type_key, k: r.kind, c: r.color, pr: r.price, old: r.old_price, img: r.image_url, isNew: r.is_new, wk: r.is_week, stock: r.in_stock, active: r.active, desc: r.description || {}, sort: r.sort }; };
-    var prodTo = function (p) { return { name: p.name, category: p.cat, type_key: p.ty, kind: p.k, color: p.c, price: p.pr, old_price: p.old || null, image_url: p.img || null, description: p.desc || {}, is_new: !!p.isNew, is_week: !!p.wk, in_stock: p.stock !== false, active: p.active !== false, sort: p.sort || 0 }; };
-    var ordFrom = function (r) { return { id: r.id, status: r.status, name: r.customer_name, phone: r.phone, address: r.address, note: r.note, lat: r.lat, lng: r.lng, total: r.total, created: r.created_at, items: (r.order_items || []).map(function (i) { return { name: i.name, price: i.price, qty: i.qty }; }) }; };
-    var conFrom = function (r) { return { id: r.id, name: r.patient_name, phone: r.patient_phone, city: r.city, lang: r.lang, summary: r.summary, photos: r.photos || [], note: r.staff_note, created: r.created_at, userId: r.user_id }; };
-    var chk = function (res) { if (res.error) throw fail("generic", res.error.message); return res.data; };
-
-    api.init = function () { return Promise.resolve(); };
-    api.me = function () {
-      return sb.auth.getSession().then(function (r) {
-        var s = r.data && r.data.session; if (!s) return null;
-        return sb.from("profiles").select("*").eq("id", s.user.id).maybeSingle().then(function (p) {
-          var d = p.data || {};
-          return { id: s.user.id, email: s.user.email, name: d.full_name || "", phone: d.phone || "", role: d.role || "customer" };
-        });
+  // ================= SERVER =================
+  var server = {};
+  function call(method, path, body) {
+    var opts = { method: method, headers: {}, credentials: "same-origin" };
+    if (body !== undefined) { opts.headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(body); }
+    return fetch(path, opts).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (j) {
+        if (!r.ok) throw fail(j.error || "generic");
+        return j;
       });
-    };
-    api.signUp = function (o) {
-      return sb.auth.signUp({ email: o.email, password: o.password, options: { data: { full_name: o.name, phone: o.phone } } }).then(function (r) {
-        if (r.error) throw fail(/registered|exists/i.test(r.error.message) ? "exists" : /password/i.test(r.error.message) ? "weak" : "generic", r.error.message);
-        if (r.data.user && r.data.user.identities && r.data.user.identities.length === 0) throw fail("exists");
-        return { needsConfirm: !r.data.session };
-      });
-    };
-    api.signIn = function (email, password) {
-      return sb.auth.signInWithPassword({ email: email, password: password }).then(function (r) {
-        if (r.error) throw fail(/not confirmed/i.test(r.error.message) ? "unconfirmed" : /invalid/i.test(r.error.message) ? "bad_credentials" : "generic", r.error.message);
-      });
-    };
-    api.signOut = function () { return sb.auth.signOut(); };
-    api.updateProfile = function (u, o) { return sb.from("profiles").update({ full_name: o.name, phone: o.phone }).eq("id", u.id).then(chk); };
-
-    api.listProducts = function () { return sb.from("products").select("*").order("sort").order("created_at", { ascending: false }).then(chk).then(function (rows) { return rows.map(prodFrom); }); };
-    api.saveProduct = function (p) { var row = prodTo(p); return (p.id ? sb.from("products").update(row).eq("id", p.id) : sb.from("products").insert(row)).then(chk); };
-    api.deleteProduct = function (id) { return sb.from("products").delete().eq("id", id).then(chk); };
-    api.uploadProductImage = function (file) {
-      return L.compress(file, 1200, 0.85).then(function (blob) {
-        var path = Date.now() + "-" + rid() + ".jpg";
-        return sb.storage.from("product-images").upload(path, blob, { contentType: "image/jpeg" }).then(function (r) {
-          if (r.error) throw fail("generic", r.error.message);
-          return sb.storage.from("product-images").getPublicUrl(path).data.publicUrl;
-        });
-      });
-    };
-
-    api.placeOrder = function (o) {
-      return sb.rpc("place_order", { p_name: o.name, p_phone: o.phone, p_address: o.address, p_note: o.note || "", p_lat: o.lat == null ? null : o.lat, p_lng: o.lng == null ? null : o.lng, p_items: o.items }).then(chk);
-    };
-    api.myOrders = function (u) { return sb.from("orders").select("*, order_items(*)").eq("user_id", u.id).order("created_at", { ascending: false }).then(chk).then(function (r) { return r.map(ordFrom); }); };
-    api.allOrders = function () { return sb.from("orders").select("*, order_items(*)").order("created_at", { ascending: false }).then(chk).then(function (r) { return r.map(ordFrom); }); };
-    api.setOrderStatus = function (id, status) { return sb.from("orders").update({ status: status }).eq("id", id).then(chk); };
-
-    api.uploadPatientPhoto = function (u, file, slot) {
-      return L.compress(file, 1600, 0.82).then(function (blob) {
-        var path = (u ? u.id : "staff") + "/" + Date.now() + "-" + slot + "-" + rid() + ".jpg";
-        return sb.storage.from("patient-photos").upload(path, blob, { contentType: "image/jpeg" }).then(function (r) {
-          if (r.error) throw fail("generic", r.error.message);
-          return path;
-        });
-      });
-    };
-    api.photoUrl = function (path) { return sb.storage.from("patient-photos").createSignedUrl(path, 3600).then(function (r) { return r.data ? r.data.signedUrl : ""; }); };
-    api.saveConsultation = function (u, o) {
-      var row = { user_id: o.forSelf ? u.id : null, created_by: u.id, patient_name: o.name, patient_phone: o.phone, city: o.city, lang: o.lang, answers: o.answers, summary: o.summary, photos: o.photos || [] };
-      return sb.from("consultations").insert(row).then(chk);
-    };
-    api.listConsultations = function () { return sb.from("consultations").select("*").order("created_at", { ascending: false }).then(chk).then(function (r) { return r.map(conFrom); }); };
-    api.saveConsultationNote = function (id, note) { return sb.from("consultations").update({ staff_note: note, updated_at: new Date().toISOString() }).eq("id", id).then(chk); };
-
-    api.listProfiles = function () { return sb.from("profiles").select("*").order("created_at", { ascending: false }).then(chk).then(function (r) { return r.map(function (p) { return { id: p.id, email: p.email, name: p.full_name, phone: p.phone, role: p.role, created: p.created_at }; }); }); };
-    api.setRole = function (id, role) { return sb.rpc("set_user_role", { target: id, new_role: role }).then(chk); };
+    });
   }
+  server.me = function () { return call("GET", "/api/auth/me").then(function (j) { return j.user || null; }); };
+  server.signUp = function (o) { return call("POST", "/api/auth/register", { email: o.email, password: o.password, name: o.name, phone: o.phone }).then(function () { return { needsConfirm: false }; }); };
+  server.signIn = function (email, password) { return call("POST", "/api/auth/login", { email: email, password: password }).then(function () {}); };
+  server.signOut = function () { return call("POST", "/api/auth/logout", {}).then(function () {}); };
+  server.updateProfile = function (u, o) { return call("PATCH", "/api/auth/profile", { name: o.name, phone: o.phone }).then(function () {}); };
 
-  // ---------- Demo (localStorage) ----------
-  else {
-    var K = function (k) { return "liber-demo-" + k; };
-    var get = function (k, d) { try { var s = localStorage.getItem(K(k)); return s ? JSON.parse(s) : d; } catch (e) { return d; } };
-    var set = function (k, v) { try { localStorage.setItem(K(k), JSON.stringify(v)); } catch (e) { throw fail("storage", "Brauzer xotirasi to'ldi"); } };
-    var hash = function (s) {
-      if (window.crypto && crypto.subtle && window.TextEncoder) {
-        return crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)).then(function (b) { return Array.prototype.map.call(new Uint8Array(b), function (x) { return ("0" + x.toString(16)).slice(-2); }).join(""); });
-      }
-      return Promise.resolve(btoa(unescape(encodeURIComponent(s))));
-    };
-    var users = function () {
-      var u = get("users", null);
-      if (!u) {
-        u = [{ id: "demo-admin", email: "admin@demo.local", name: "Demo Admin", phone: "", role: "admin", hash: "" }, { id: "demo-staff", email: "staff@demo.local", name: "Demo Xodim", phone: "", role: "staff", hash: "" }];
-        set("users", u);
-      }
-      return u;
-    };
-    var products = function () {
-      var p = get("products", null);
-      if (!p) { p = (L.DEFAULT_PRODUCTS || []).map(function (d, i) { return { id: "d" + (i + 1), name: d.name, cat: d.category, ty: d.type_key, k: d.kind, c: d.color, pr: d.price, old: d.old_price, img: null, isNew: d.is_new, wk: d.is_week, stock: true, active: true, desc: {}, sort: d.sort }; }); set("products", p); }
-      return p;
-    };
-    var sessionUser = function () { var id = get("session", null); return id ? users().filter(function (u) { return u.id === id; })[0] || null : null; };
-    var pub = function (u) { return u ? { id: u.id, email: u.email, name: u.name, phone: u.phone, role: u.role } : null; };
+  server.listProducts = function () { return call("GET", "/api/products").then(function (j) { return j.products; }); };
+  server.saveProduct = function (p) { return (p.id ? call("PUT", "/api/products/" + p.id, p) : call("POST", "/api/products", p)).then(function () {}); };
+  server.deleteProduct = function (id) { return call("DELETE", "/api/products/" + id).then(function () {}); };
+  server.seedProducts = function () { return call("POST", "/api/products/seed", {}).then(function (j) { return j.count; }); };
+  server.uploadProductImage = function (file) {
+    return L.compress(file, 1000, 0.8).then(blobToB64).then(function (b64) { return call("POST", "/api/files", { kind: "product", data: b64 }); }).then(function (j) { return j.url; });
+  };
 
-    api.init = function () { users(); products(); return Promise.resolve(); };
-    api.me = function () { return Promise.resolve(pub(sessionUser())); };
-    api.demoLogin = function (role) { set("session", role === "admin" ? "demo-admin" : "demo-staff"); fire(); return Promise.resolve(); };
-    api.signUp = function (o) {
-      var us = users();
-      if (us.some(function (u) { return u.email.toLowerCase() === o.email.toLowerCase(); })) return Promise.reject(fail("exists"));
-      if (o.password.length < 6) return Promise.reject(fail("weak"));
-      return hash(o.password).then(function (h) {
-        var u = { id: "u" + rid(), email: o.email, name: o.name, phone: o.phone, role: "customer", hash: h };
-        us.push(u); set("users", us); set("session", u.id); fire();
-        return { needsConfirm: false };
-      });
-    };
-    api.signIn = function (email, password) {
-      return hash(password).then(function (h) {
-        var u = users().filter(function (x) { return x.email.toLowerCase() === email.toLowerCase() && x.hash && x.hash === h; })[0];
-        if (!u) throw fail("bad_credentials");
-        set("session", u.id); fire();
-      });
-    };
-    api.signOut = function () { set("session", null); fire(); return Promise.resolve(); };
-    api.updateProfile = function (u, o) { var us = users(); us.forEach(function (x) { if (x.id === u.id) { x.name = o.name; x.phone = o.phone; } }); set("users", us); return Promise.resolve(); };
+  server.placeOrder = function (o) { return call("POST", "/api/orders", { name: o.name, phone: o.phone, address: o.address, note: o.note || "", lat: o.lat, lng: o.lng, items: o.items }).then(function (j) { return j.id; }); };
+  server.myOrders = function () { return call("GET", "/api/orders/mine").then(function (j) { return j.orders; }); };
+  server.allOrders = function () { return call("GET", "/api/orders").then(function (j) { return j.orders; }); };
+  server.setOrderStatus = function (id, status) { return call("PATCH", "/api/orders/" + id, { status: status }).then(function () {}); };
 
-    api.listProducts = function () { return Promise.resolve(products().slice().sort(function (a, b) { return (a.sort || 0) - (b.sort || 0); })); };
-    api.saveProduct = function (p) {
-      var ps = products();
-      if (p.id) ps = ps.map(function (x) { return x.id === p.id ? Object.assign({}, p) : x; });
-      else { ps.unshift(Object.assign({}, p, { id: "d" + rid() })); }
-      set("products", ps); return Promise.resolve();
-    };
-    api.deleteProduct = function (id) { set("products", products().filter(function (x) { return x.id !== id; })); return Promise.resolve(); };
-    api.uploadProductImage = function (file) { return L.compress(file, 700, 0.75).then(blobToDataUrl); };
+  server.uploadPatientPhoto = function (u, file) {
+    return L.compress(file, 1400, 0.78).then(blobToB64).then(function (b64) { return call("POST", "/api/files", { kind: "patient", data: b64 }); }).then(function (j) { return j.id; });
+  };
+  server.photoUrl = function (id) { return Promise.resolve("/api/files/" + id); };
+  server.saveConsultation = function (u, o) { return call("POST", "/api/consultations", o).then(function () {}); };
+  server.listConsultations = function () { return call("GET", "/api/consultations").then(function (j) { return j.consultations; }); };
+  server.saveConsultationNote = function (id, note) { return call("PATCH", "/api/consultations/" + id, { note: note }).then(function () {}); };
 
-    api.placeOrder = function (o) {
-      var u = sessionUser(); if (!u) return Promise.reject(fail("not_authenticated"));
-      var ps = products(), items = [], total = 0;
-      o.items.forEach(function (it) { var p = ps.filter(function (x) { return x.id === it.id && x.active && x.stock; })[0]; if (p) { var q = Math.max(1, Math.min(99, it.qty)); items.push({ name: p.name, price: p.pr, qty: q }); total += p.pr * q; } });
-      if (!items.length) return Promise.reject(fail("no_valid_items"));
-      var os = get("orders", []); var id = os.length ? os[0].id + 1 : 1001;
-      os.unshift({ id: id, userId: u.id, status: "new", name: o.name, phone: o.phone, address: o.address, note: o.note || "", lat: o.lat == null ? null : o.lat, lng: o.lng == null ? null : o.lng, total: total, created: new Date().toISOString(), items: items });
-      set("orders", os); return Promise.resolve(id);
-    };
-    api.myOrders = function (u) { return Promise.resolve(get("orders", []).filter(function (o) { return o.userId === u.id; })); };
-    api.allOrders = function () { return Promise.resolve(get("orders", [])); };
-    api.setOrderStatus = function (id, status) { set("orders", get("orders", []).map(function (o) { return o.id === id ? Object.assign({}, o, { status: status }) : o; })); return Promise.resolve(); };
+  server.listProfiles = function () { return call("GET", "/api/users").then(function (j) { return j.users; }); };
+  server.setRole = function (id, role) { return call("POST", "/api/users/" + id + "/role", { role: role }).then(function () {}); };
 
-    api.uploadPatientPhoto = function (u, file) { return L.compress(file, 640, 0.7).then(blobToDataUrl); };
-    api.photoUrl = function (path) { return Promise.resolve(path); };
-    api.saveConsultation = function (u, o) {
-      var cs = get("consults", []); var id = cs.length ? cs[0].id + 1 : 1;
-      cs.unshift({ id: id, userId: o.forSelf ? u.id : null, name: o.name, phone: o.phone, city: o.city, lang: o.lang, summary: o.summary, photos: o.photos || [], note: "", created: new Date().toISOString() });
-      set("consults", cs); return Promise.resolve();
-    };
-    api.listConsultations = function () { return Promise.resolve(get("consults", [])); };
-    api.saveConsultationNote = function (id, note) { set("consults", get("consults", []).map(function (c) { return c.id === id ? Object.assign({}, c, { note: note }) : c; })); return Promise.resolve(); };
+  // ================= DEMO (localStorage) =================
+  var demo = {};
+  var K = function (k) { return "liber-demo-" + k; };
+  var get = function (k, d) { try { var s = localStorage.getItem(K(k)); return s ? JSON.parse(s) : d; } catch (e) { return d; } };
+  var set = function (k, v) { try { localStorage.setItem(K(k), JSON.stringify(v)); } catch (e) { throw fail("storage", "Brauzer xotirasi to'ldi"); } };
+  var hash = function (s) {
+    if (window.crypto && crypto.subtle && window.TextEncoder) {
+      return crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)).then(function (b) { return Array.prototype.map.call(new Uint8Array(b), function (x) { return ("0" + x.toString(16)).slice(-2); }).join(""); });
+    }
+    return Promise.resolve(btoa(unescape(encodeURIComponent(s))));
+  };
+  var users = function () {
+    var u = get("users", null);
+    if (!u) {
+      u = [{ id: "demo-admin", email: "admin@demo.local", name: "Demo Admin", phone: "", role: "admin", hash: "" }, { id: "demo-staff", email: "staff@demo.local", name: "Demo Xodim", phone: "", role: "staff", hash: "" }];
+      set("users", u);
+    }
+    return u;
+  };
+  var sampleProducts = function () {
+    return (L.DEFAULT_PRODUCTS || []).map(function (d, i) { return { id: "d" + (i + 1), name: d.name, cat: d.category, ty: d.type_key, k: d.kind, c: d.color, pr: d.price, old: d.old_price, img: null, isNew: d.is_new, wk: d.is_week, stock: true, active: true, desc: {}, sort: d.sort }; });
+  };
+  var products = function () { var p = get("products", null); if (!p) { p = sampleProducts(); set("products", p); } return p; };
+  var sessionUser = function () { var id = get("session", null); return id ? users().filter(function (u) { return u.id === id; })[0] || null : null; };
+  var pub = function (u) { return u ? { id: u.id, email: u.email, name: u.name, phone: u.phone, role: u.role } : null; };
 
-    api.listProfiles = function () { return Promise.resolve(users().map(function (u) { return { id: u.id, email: u.email, name: u.name, phone: u.phone, role: u.role, created: "" }; })); };
-    api.setRole = function (id, role) { var us = users(); us.forEach(function (u) { if (u.id === id) u.role = role; }); set("users", us); return Promise.resolve(); };
-  }
+  demo.init = function () { users(); products(); return Promise.resolve(); };
+  demo.me = function () { return Promise.resolve(pub(sessionUser())); };
+  demo.demoLogin = function (role) { set("session", role === "admin" ? "demo-admin" : "demo-staff"); fire(); return Promise.resolve(); };
+  demo.signUp = function (o) {
+    var us = users();
+    if (us.some(function (u) { return u.email.toLowerCase() === o.email.toLowerCase(); })) return Promise.reject(fail("exists"));
+    if (o.password.length < 8) return Promise.reject(fail("weak"));
+    return hash(o.password).then(function (h) {
+      var u = { id: "u" + rid(), email: o.email, name: o.name, phone: o.phone, role: "customer", hash: h };
+      us.push(u); set("users", us); set("session", u.id); fire();
+      return { needsConfirm: false };
+    });
+  };
+  demo.signIn = function (email, password) {
+    return hash(password).then(function (h) {
+      var u = users().filter(function (x) { return x.email.toLowerCase() === email.toLowerCase() && x.hash && x.hash === h; })[0];
+      if (!u) throw fail("bad_credentials");
+      set("session", u.id); fire();
+    });
+  };
+  demo.signOut = function () { set("session", null); fire(); return Promise.resolve(); };
+  demo.updateProfile = function (u, o) { var us = users(); us.forEach(function (x) { if (x.id === u.id) { x.name = o.name; x.phone = o.phone; } }); set("users", us); return Promise.resolve(); };
+
+  demo.listProducts = function () { return Promise.resolve(products().slice().sort(function (a, b) { return (a.sort || 0) - (b.sort || 0); })); };
+  demo.saveProduct = function (p) {
+    var ps = products();
+    if (p.id) ps = ps.map(function (x) { return x.id === p.id ? Object.assign({}, p) : x; });
+    else ps.unshift(Object.assign({}, p, { id: "d" + rid() }));
+    set("products", ps); return Promise.resolve();
+  };
+  demo.deleteProduct = function (id) { set("products", products().filter(function (x) { return x.id !== id; })); return Promise.resolve(); };
+  demo.seedProducts = function () { var ps = products(); if (ps.length) return Promise.reject(fail("not_empty")); set("products", sampleProducts()); return Promise.resolve(18); };
+  demo.uploadProductImage = function (file) { return L.compress(file, 700, 0.75).then(blobToDataUrl); };
+
+  demo.placeOrder = function (o) {
+    var u = sessionUser(); if (!u) return Promise.reject(fail("not_authenticated"));
+    var ps = products(), items = [], total = 0;
+    o.items.forEach(function (it) { var p = ps.filter(function (x) { return x.id === it.id && x.active && x.stock; })[0]; if (p) { var q = Math.max(1, Math.min(99, it.qty)); items.push({ name: p.name, price: p.pr, qty: q }); total += p.pr * q; } });
+    if (!items.length) return Promise.reject(fail("no_valid_items"));
+    var os = get("orders", []); var id = os.length ? os[0].id + 1 : 1001;
+    os.unshift({ id: id, userId: u.id, status: "new", name: o.name, phone: o.phone, address: o.address, note: o.note || "", lat: o.lat == null ? null : o.lat, lng: o.lng == null ? null : o.lng, total: total, created: new Date().toISOString(), items: items });
+    set("orders", os); return Promise.resolve(id);
+  };
+  demo.myOrders = function (u) { return Promise.resolve(get("orders", []).filter(function (o) { return o.userId === u.id; })); };
+  demo.allOrders = function () { return Promise.resolve(get("orders", [])); };
+  demo.setOrderStatus = function (id, status) { set("orders", get("orders", []).map(function (o) { return o.id === id ? Object.assign({}, o, { status: status }) : o; })); return Promise.resolve(); };
+
+  demo.uploadPatientPhoto = function (u, file) { return L.compress(file, 640, 0.7).then(blobToDataUrl); };
+  demo.photoUrl = function (path) { return Promise.resolve(path); };
+  demo.saveConsultation = function (u, o) {
+    var cs = get("consults", []); var id = cs.length ? cs[0].id + 1 : 1;
+    cs.unshift({ id: id, userId: o.forSelf ? u.id : null, name: o.name, phone: o.phone, city: o.city, lang: o.lang, summary: o.summary, photos: o.photos || [], note: "", created: new Date().toISOString() });
+    set("consults", cs); return Promise.resolve();
+  };
+  demo.listConsultations = function () { return Promise.resolve(get("consults", [])); };
+  demo.saveConsultationNote = function (id, note) { set("consults", get("consults", []).map(function (c) { return c.id === id ? Object.assign({}, c, { note: note }) : c; })); return Promise.resolve(); };
+  demo.listProfiles = function () { return Promise.resolve(users().map(function (u) { return { id: u.id, email: u.email, name: u.name, phone: u.phone, role: u.role, created: "" }; })); };
+  demo.setRole = function (id, role) { var us = users(); us.forEach(function (u) { if (u.id === id) u.role = role; }); set("users", us); return Promise.resolve(); };
+
+  // ================= tanlash =================
+  var impl = demo;
+  var api = { mode: "demo", note: "" };
+  api.onAuth = function (cb) { authCb.push(cb); };
+  ["me", "signUp", "signIn", "signOut", "updateProfile", "listProducts", "saveProduct", "deleteProduct", "seedProducts", "uploadProductImage",
+    "placeOrder", "myOrders", "allOrders", "setOrderStatus", "uploadPatientPhoto", "photoUrl", "saveConsultation", "listConsultations",
+    "saveConsultationNote", "listProfiles", "setRole", "demoLogin"].forEach(function (n) {
+    api[n] = function () { var f = impl[n]; return f ? f.apply(null, arguments) : Promise.reject(fail("unsupported")); };
+  });
+
+  // Backend bormi? /api/health javobiga qarab rejim tanlanadi:
+  //   backend yo'q (404, tarmoq xatosi)  -> demo
+  //   backend bor va ishlayapti          -> server
+  //   backend bor, lekin baza ulanmagan  -> xato banneri (demo ma'lumotlar bilan)
+  api.init = function () {
+    var ctl = typeof AbortController !== "undefined" ? new AbortController() : null;
+    var timer = setTimeout(function () { if (ctl) ctl.abort(); }, 4000);
+    return fetch("/api/health", { cache: "no-store", signal: ctl ? ctl.signal : undefined })
+      .then(function (r) { return r.json().catch(function () { return null; }); })
+      .then(function (j) {
+        clearTimeout(timer);
+        if (j && j.backend) {
+          if (j.ok) { impl = server; api.mode = "server"; }
+          else { api.mode = "error"; api.note = j.error || ""; }
+        }
+      })
+      .catch(function () { clearTimeout(timer); })
+      .then(function () { return impl.init ? impl.init() : undefined; });
+  };
 
   L.api = api;
 })(window.LIBER = window.LIBER || {});
