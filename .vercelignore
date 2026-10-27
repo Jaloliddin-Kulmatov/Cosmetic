@@ -1,0 +1,8 @@
+# Vercel ga faqat sayt fayllari yuklansin. config.js ishlab turgan saytda /api/config orqali beriladi.
+config.js
+supabase/
+tools/
+README.md
+preview.html
+.env*
+.DS_Store

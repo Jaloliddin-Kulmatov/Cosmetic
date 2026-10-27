@@ -1,0 +1,7 @@
+{
+  "name": "liber-cosmetic",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Liber Cosmetic: onlayn do'kon va kosmetologik konsultatsiya (Supabase + Vercel)",
+  "engines": { "node": ">=18" }
+}

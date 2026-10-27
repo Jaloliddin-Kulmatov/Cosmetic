@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Liber Cosmetic</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=Jost:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="langbar"><div class="wrap" id="langbar" role="group" aria-label="Language"></div></div>
+
+<header class="band">
+  <div class="wrap band-in">
+    <button class="menu" id="menuBtn" data-act="menu" aria-expanded="false" aria-controls="nav">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 7h18M3 12h18M3 17h18"/></svg>
+      <span data-t="menu"></span>
+    </button>
+    <a class="logo" href="#bosh" data-go="home"><img src="assets/logo.jpg" alt="Liber Cosmetic" width="360" height="175"></a>
+    <div class="tools">
+      <form class="sform" role="search">
+        <input type="text" data-tp="search" data-ta="search" autocomplete="off">
+        <button type="submit" data-ta="search"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l5 5"/></svg></button>
+      </form>
+      <a class="iconbtn" id="acctBtn" href="#kirish" data-go="acct" data-ta="acc">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="8.5" r="3.6"/><path d="M4.8 20c.6-3.6 3.5-5.6 7.2-5.6s6.6 2 7.2 5.6"/></svg>
+        <i id="acctDot" hidden></i>
+      </a>
+      <a class="iconbtn" href="#savat" data-go="savat" data-ta="cart">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 4h2.5l2.2 10.2h9.6L19.5 7H6.4"/><circle cx="9" cy="18.5" r="1.4"/><circle cx="16.5" cy="18.5" r="1.4"/></svg>
+        <b id="cartN">0</b>
+      </a>
+    </div>
+  </div>
+  <div class="searchrow"><div class="wrap">
+    <form class="sform" role="search">
+      <input type="text" data-tp="search" data-ta="search" autocomplete="off">
+      <button type="submit" data-ta="search"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l5 5"/></svg></button>
+    </form>
+  </div></div>
+</header>
+
+<nav class="nav" id="nav"><div class="wrap" id="navlinks"></div></nav>
+<div class="demo" id="demoBar" hidden></div>
+
+<main id="view"></main>
+
+<footer class="foot"><div class="wrap foot-in" id="foot"></div></footer>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<!-- Supabase sozlangan bo'lsa ishlatiladi (config.js). Sozlanmasa sayt demo rejimda ishlaydi. -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.111.0/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script src="i18n.js"></script>
+<script src="art.js"></script>
+<script src="defaults.js"></script>
+<script src="api.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
