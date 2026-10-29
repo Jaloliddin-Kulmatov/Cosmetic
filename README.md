@@ -1,5 +1,7 @@
 # Liber Cosmetic
 
+**Live:** [cosmetic-ten-kappa.vercel.app](https://cosmetic-ten-kappa.vercel.app) · **Code:** [github.com/Jaloliddin-Kulmatov/Cosmetic](https://github.com/Jaloliddin-Kulmatov/Cosmetic)
+
 Online cosmetics shop and cosmetology consultation. Plain HTML, CSS and JavaScript on the front end, Vercel serverless functions on the back end, and Postgres (Supabase) for data. **One secret is all it needs: `DATABASE_URL`.**
 
 ## What it does
